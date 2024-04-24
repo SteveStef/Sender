@@ -19,6 +19,11 @@ func SendEmail(email string, info string, title string) EmailResponse {
   apiURL := os.Getenv("RAPID_API_URL")
   apiKey:= os.Getenv("RAPID_API_KEY")
   sendTo := os.Getenv("SEND_TO")
+
+  fmt.Println(apiURL)
+  fmt.Println(apiKey)
+  fmt.Println(sendTo)
+
 	var emailResp EmailResponse
 
 	payload := bytes.NewBufferString(fmt.Sprintf(`{
@@ -81,6 +86,8 @@ func postEmail(w http.ResponseWriter, r *http.Request) {
     Info string `json:"info"`
   }{}
 
+  fmt.Println(r.Body)
+
   err := json.NewDecoder(r.Body).Decode(&requestData)
   if err != nil {
     w.WriteHeader(http.StatusBadRequest)
@@ -100,11 +107,19 @@ func main() {
   err := godotenv.Load()
   if err != nil {
     fmt.Println("Error loading .env file")
+    v := os.Getenv("RAPID_API_URL")
+    fmt.Println(v)
   }
   mux := http.NewServeMux()
   mux.HandleFunc("/email", postEmail)
   handler := CorsMiddleware(mux)
   fmt.Println("Server started on port 8080")
-  http.ListenAndServe(":8080", handler)
+  port := os.Getenv("PORT")
+  if port != "" {
+    fmt.Println("Port is set to " + port)
+    http.ListenAndServe(":" + port, handler)
+  } else {
+    http.ListenAndServe(":8080", handler)
+  }
 }
 
