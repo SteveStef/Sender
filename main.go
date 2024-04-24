@@ -97,15 +97,14 @@ func postEmail(w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-    err := godotenv.Load()
-    if err != nil {
+  err := godotenv.Load()
+  if err != nil {
     fmt.Println("Error loading .env file")
-      return
-    }
-    mux := http.NewServeMux()
-    mux.HandleFunc("/email", postEmail)
-    handler := CorsMiddleware(mux)
-    fmt.Println("Server started on port 8080")
-    http.ListenAndServe(":8080", handler)
+  }
+  mux := http.NewServeMux()
+  mux.HandleFunc("/email", postEmail)
+  handler := CorsMiddleware(mux)
+  fmt.Println("Server started on port 8080")
+  http.ListenAndServe(":8080", handler)
 }
 
