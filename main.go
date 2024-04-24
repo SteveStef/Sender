@@ -20,6 +20,15 @@ func SendEmail(email string, info string, title string) EmailResponse {
   apiKey:= os.Getenv("RAPID_API_KEY")
   sendTo := os.Getenv("SEND_TO")
 
+
+  fmt.Println(apiURL)
+  fmt.Println(apiKey)
+  fmt.Println(sendTo)
+
+  fmt.Println(email)
+  fmt.Println(info)
+  fmt.Println(title)
+
 	var emailResp EmailResponse
 
 	payload := bytes.NewBufferString(fmt.Sprintf(`{
@@ -30,6 +39,8 @@ func SendEmail(email string, info string, title string) EmailResponse {
 		"title": %s,
 		"body": %s 
 	}`, sendTo, email, title, info))
+
+  fmt.Println(payload)
 
 	req, err := http.NewRequest("POST", apiURL, payload)
 	if err != nil {
