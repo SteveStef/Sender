@@ -52,6 +52,8 @@ func SendEmail(email string, info string, title string) EmailResponse {
 		return EmailResponse{Error: true, Message: fmt.Sprintf("failed to read response: %v", err)}
 	}
 
+  fmt.Println(string(body))
+
 	err = json.Unmarshal(body, &emailResp)
 	if err != nil {
     return EmailResponse{Error: true, Message: fmt.Sprintf("failed to unmarshal response: %v", err)}
@@ -87,8 +89,6 @@ func postEmail(w http.ResponseWriter, r *http.Request) {
     Title string `json:"title"`
     Info string `json:"info"`
   }{}
-
-  fmt.Println(r.Body)
 
   err := json.NewDecoder(r.Body).Decode(&requestData)
   if err != nil {
