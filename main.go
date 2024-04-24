@@ -20,10 +20,6 @@ func SendEmail(email string, info string, title string) EmailResponse {
   apiKey:= os.Getenv("RAPID_API_KEY")
   sendTo := os.Getenv("SEND_TO")
 
-  fmt.Println(apiURL)
-  fmt.Println(apiKey)
-  fmt.Println(sendTo)
-
 	var emailResp EmailResponse
 
 	payload := bytes.NewBufferString(fmt.Sprintf(`{
@@ -79,7 +75,13 @@ func CorsMiddleware(next http.Handler) http.Handler {
 }
 
 func postEmail(w http.ResponseWriter, r *http.Request) {
-  // take in data from the request
+
+  auth := r.Header.Get("Authorization")
+  if auth != os.Getenv("AUTH_TOKEN") {
+    w.WriteHeader(http.StatusUnauthorized)
+    return
+  }
+
   requestData := struct {
     Email string `json:"email"`
     Title string `json:"title"`
@@ -110,15 +112,17 @@ func main() {
     v := os.Getenv("RAPID_API_URL")
     fmt.Println(v)
   }
+
   mux := http.NewServeMux()
   mux.HandleFunc("/email", postEmail)
   handler := CorsMiddleware(mux)
-  fmt.Println("Server started on port 8080")
+
   port := os.Getenv("PORT")
   if port != "" {
-    fmt.Println("Port is set to " + port)
+    fmt.Println("Listening on port " + port)
     http.ListenAndServe(":" + port, handler)
   } else {
+    fmt.Println("Listening on port 8080")
     http.ListenAndServe(":8080", handler)
   }
 }
