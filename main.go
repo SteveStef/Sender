@@ -1,111 +1,141 @@
 package main
 
 import (
-  "fmt"
-  "io"
-  "net/http"
-  "encoding/json"
-  "strings"
-  "os"
-  "github.com/joho/godotenv"
+	"encoding/json"
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+	"time"
+	"github.com/joho/godotenv"
 )
 
-func SendEmail(email string, info string, title string) error {
-  apiURL := os.Getenv("RAPID_API_URL")
-  apiKey:= os.Getenv("RAPID_API_KEY")
-  sendTo := os.Getenv("SEND_TO")
+var ValidDomains = []string{"http://localhost:3000", "https://magic-media.org"}
 
-  payload := strings.NewReader("{\n    \"sendto\": \"" + sendTo + "\",\n    \"name\": \"Magic Media\",\n    \"replyTo\": \"" + email + "\",\n    \"ishtml\": \"false\",\n    \"title\": \"" + title + "\",\n    \"body\": \"" + info + "\"\n}")
+type EmailPayload struct {
+	SendTo   string `json:"sendto"`
+	Name     string `json:"name"`
+	ReplyTo string `json:"replyTo"`
+	IsHTML   bool   `json:"ishtml"`
+	Title    string `json:"title"`
+	Body     string `json:"body"`
+}
 
-  req, err := http.NewRequest("POST", apiURL, payload)
-  if err != nil {
-    return err
-  }
+var httpClient = &http.Client{
+	Timeout: 20 * time.Second, // Set a timeout for requests
+}
+
+func SendEmail(name string, email string, info string, title string) error {
+	apiURL := os.Getenv("RAPID_API_URL")
+	apiKey := os.Getenv("RAPID_API_KEY")
+	sendTo := os.Getenv("SEND_TO")
+
+	info = strings.ReplaceAll(info, "\n", " ")
+	name = strings.ReplaceAll(name, "\n", " ")
+	email = strings.ReplaceAll(email, "\n", " ")
+	title = strings.ReplaceAll(title, "\n", " ")
+
+	payload := EmailPayload{
+		SendTo:   sendTo,
+		Name:     name,
+		ReplyTo: email,
+		IsHTML:   false,
+		Title:    title,
+		Body:     info,
+	}
+
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	req, err := http.NewRequest("POST", apiURL, strings.NewReader(string(payloadBytes)))
+	if err != nil {
+		return err
+	}
 
 	req.Header.Add("content-type", "application/json")
 	req.Header.Add("X-RapidAPI-Key", apiKey)
 	req.Header.Add("X-RapidAPI-Host", "mail-sender-api1.p.rapidapi.com")
 
-	res, err := http.DefaultClient.Do(req)
-  if err != nil {
-    return err
-  }
-
+	res, err := httpClient.Do(req)
+	if err != nil {
+		return err
+	}
 	defer res.Body.Close()
-	body, err := io.ReadAll(res.Body)
-  if err != nil {
-    return err
-  }
 
-	fmt.Println(res)
-	fmt.Println(string(body))
-
-	return nil;
+	return nil
 }
 
 func CorsMiddleware(next http.Handler) http.Handler {
-    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-        w.Header().Set("Access-Control-Allow-Origin", "*")
-        w.Header().Set("Access-Control-Allow-Methods", "POST")
-        w.Header().Set("Access-Control-Allow-Headers", "Accept, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization")
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		domain := r.Header.Get("Origin")
+		if domain != "" {
+			for _, validDomain := range ValidDomains {
+				if domain == validDomain {
+					w.Header().Set("Access-Control-Allow-Origin", domain)
+					break
+				}
+			}
+		}
 
-        if r.Method == "OPTIONS" {
-            return
-        }
+		w.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
 
-        next.ServeHTTP(w, r)
-    })
+		if r.Method == "OPTIONS" {
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func postEmail(w http.ResponseWriter, r *http.Request) {
+	auth := r.Header.Get("Authorization")
+	if auth != os.Getenv("AUTH_TOKEN") {
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+	requestData := struct {
+		Email string `json:"email"`
+		Title string `json:"title"`
+		Info string `json:"info"`
+		Name string `json:"name"`
+	}{}
 
-  auth := r.Header.Get("Authorization")
-  if auth != os.Getenv("AUTH_TOKEN") {
-    w.WriteHeader(http.StatusUnauthorized)
-    return
-  }
+	err := json.NewDecoder(r.Body).Decode(&requestData)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-  requestData := struct {
-    Email string `json:"email"`
-    Title string `json:"title"`
-    Info string `json:"info"`
-  }{}
+	error := SendEmail(requestData.Name, requestData.Email, requestData.Info, requestData.Title)
 
-  err := json.NewDecoder(r.Body).Decode(&requestData)
-  if err != nil {
-    w.WriteHeader(http.StatusBadRequest)
-    return
-  }
+	if error != nil {
+		fmt.Println(error)
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
 
-  error := SendEmail(requestData.Email, requestData.Info, requestData.Title)
-  if error != nil {
-    fmt.Println(err)
-    w.WriteHeader(http.StatusInternalServerError)
-    return
-  }
-
-  w.WriteHeader(http.StatusOK)
+	w.WriteHeader(http.StatusOK)
 }
 
 func main() {
-  err := godotenv.Load()
-  if err != nil {
-    fmt.Println("Error loading .env file")
-    v := os.Getenv("RAPID_API_URL")
-    fmt.Println(v)
-  }
+	godotenv.Load()
 
-  mux := http.NewServeMux()
-  mux.HandleFunc("/email", postEmail)
-  handler := CorsMiddleware(mux)
+	requiredEnvVars := []string{"RAPID_API_URL", "RAPID_API_KEY", "SEND_TO", "AUTH_TOKEN", "PORT"}
+	for _, envVar := range requiredEnvVars {
+		if os.Getenv(envVar) == "" {
+			fmt.Printf("Environment variable %s is not set\n", envVar)
+			os.Exit(1)
+		}
+	}
 
-  port := os.Getenv("PORT")
-  if port != "" {
-    fmt.Println("Listening on port " + port)
-    http.ListenAndServe(":" + port, handler)
-  } else {
-    fmt.Println("Listening on port 8080")
-    http.ListenAndServe(":8080", handler)
-  }
+	mux := http.NewServeMux()
+	mux.HandleFunc("/email", postEmail)
+	handler := CorsMiddleware(mux)
+
+	port := os.Getenv("PORT")
+	fmt.Println("Listening on port " + port)
+	http.ListenAndServe(":"+port, handler)
 }
-
