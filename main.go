@@ -30,11 +30,6 @@ func SendEmail(name string, email string, info string, title string) error {
   apiKey := os.Getenv("RAPID_API_KEY")
   sendTo := os.Getenv("SEND_TO")
 
-  info = strings.ReplaceAll(info, "\n", " ")
-  name = strings.ReplaceAll(name, "\n", " ")
-  email = strings.ReplaceAll(email, "\n", " ")
-  title = strings.ReplaceAll(title, "\n", " ")
-
   payload := EmailPayload{
     SendTo:   sendTo,
     Name:     name,
@@ -96,6 +91,7 @@ func postEmail(w http.ResponseWriter, r *http.Request) {
     w.WriteHeader(http.StatusUnauthorized)
     return
   }
+
   requestData := struct {
     Email string `json:"email"`
     Title string `json:"title"`
